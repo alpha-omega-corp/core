@@ -1,0 +1,106 @@
+
+networks:
+  core:
+
+services:
+  etcd:
+    image: gcr.io/etcd-development/etcd:v3.2.10
+    container_name: core-etcd
+    restart: always
+    ports:
+      - '2379:2379'
+      - '2380:2380'
+    environment:
+      ETCD_NAME: node1
+      ETCDCTL_API: 1
+      ETCD_DEBUG: 1
+      ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd:2380
+      ETCD_INITIAL_CLUSTER: node1=http://etcd:2380
+      ETCD_INITIAL_CLUSTER_STATE: new
+      ETCD_INITIAL_CLUSTER_TOKEN: etcd-ftw
+      ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
+      ETCD_ADVERTISE_CLIENT_URLS: http://etcd:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379
+      ETCD_PEER_CLIENT_CERT_AUTH: 1
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: core-clickhouse
+    restart: on-failure
+    environment:
+      CLICKHOUSE_DB: uptrace
+      CLICKHOUSE_USER: uptrace
+      CLICKHOUSE_PASSWORD: uptrace
+      SHARD: shard1
+      REPLICA: replica1
+      KEEPER_ID: 1
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'localhost:8123/ping']
+      interval: 1s
+      timeout: 1s
+      retries: 30
+    volumes:
+      - ch_data5:/var/lib/clickhouse
+      - ./config/clickhouse.xml:/etc/clickhouse-server/config.d/config.xml
+    ports:
+      - '8123:8123'
+      - '9000:9000'
+      - '9440:9440'
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: core-db
+    restart: on-failure
+    environment:
+      POSTGRES_DB: otel
+      POSTGRES_USER: otel
+      POSTGRES_PASSWORD: otel
+    volumes:
+      - pg_data_uptrace:/var/lib/postgresql/data
+    ports:
+      - '5431:5432'
+
+  cache:
+    image: redis:6.2.2-alpine
+    container_name: core-cache
+    restart: on-failure
+    ports:
+      - '6379:6379'
+    command: redis-server --save 20 1 --loglevel warning
+    volumes:
+      - cache:/data
+
+  otelcol:
+    image: otel/opentelemetry-collector-contrib:0.88.0
+    container_name: core-otel-collector
+    restart: on-failure
+    volumes:
+      - ./config/otel-collector.yml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: core-mailpit
+    restart: always
+    ports:
+      - 1025:1025
+      - 8025:8025
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATA_FILE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    volumes:
+      - mailpit_data:/data
+
+volumes:
+  ch_data5:
+  pg_data_uptrace:
+  alertmanager_data:
+  mailpit_data:
+  cache:

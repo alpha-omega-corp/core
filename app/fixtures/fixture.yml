@@ -1,0 +1,149 @@
+# encrypted_password : test
+
+- model: User
+  rows:
+    - _id: Admin
+      name: Nicholas
+      email: bleyo@alphomega.org
+      encrypted_password: $2a$05$erJ7QK4n48FV6XHgl.yn0.NU3cPxEp7CxoYMPOzB22lZGmdtRZPSS
+      created_at: '{{ now }}'
+      updated_at: '{{ now }}'
+
+    - _id: Moderator
+      name: Moderator
+      email: moderator@alphomega.org
+      encrypted_password: $2a$05$erJ7QK4n48FV6XHgl.yn0.NU3cPxEp7CxoYMPOzB22lZGmdtRZPSS
+      created_at: '{{ now }}'
+      updated_at: '{{ now }}'
+
+    - _id: Premium
+      name: Premium
+      email: premium@alphomega.org
+      encrypted_password: $2a$05$erJ7QK4n48FV6XHgl.yn0.NU3cPxEp7CxoYMPOzB22lZGmdtRZPSS
+      created_at: '{{ now }}'
+      updated_at: '{{ now }}'
+
+    - _id: Guest
+      name: Guest
+      email: guest@alphomega.org
+      encrypted_password: $2a$05$erJ7QK4n48FV6XHgl.yn0.NU3cPxEp7CxoYMPOzB22lZGmdtRZPSS
+      created_at: '{{ now }}'
+      updated_at: '{{ now }}'
+
+
+- model: Role
+  rows:
+    - _id: Admin
+      name: admin
+
+    - _id: Moderator
+      name: moderator
+
+    - _id: Premium
+      name: premium
+
+    - _id: Bot
+      name: bot
+
+    - _id: Guest
+      name: guest
+
+
+- model: Service
+  rows:
+    - _id: Home
+      name: home
+
+    - _id: User
+      name: user
+
+    - _id: Docker
+      name: docker
+
+    - _id: Packages
+      name: packages
+
+
+# Assign Roles to Users
+###############################################
+- model: UserToRole
+  rows:
+    # Admin
+    - user_id: '{{ $.User.Admin.Id }}'
+      role_id: '{{ $.Role.Admin.Id }}'
+
+    - user_id: '{{ $.User.Admin.Id }}'
+      role_id: '{{ $.Role.Moderator.Id }}'
+
+    - user_id: '{{ $.User.Admin.Id }}'
+      role_id: '{{ $.Role.Premium.Id }}'
+
+    - user_id: '{{ $.User.Admin.Id }}'
+      role_id: '{{ $.Role.Guest.Id }}'
+    #####
+
+
+    # Moderator
+    - user_id: '{{ $.User.Moderator.Id }}'
+      role_id: '{{ $.Role.Moderator.Id }}'
+
+    - user_id: '{{ $.User.Moderator.Id }}'
+      role_id: '{{ $.Role.Guest.Id }}'
+    #####
+
+
+    # Premium
+    - user_id: '{{ $.User.Premium.Id }}'
+      role_id: '{{ $.Role.Premium.Id }}'
+
+    - user_id: '{{ $.User.Premium.Id }}'
+      role_id: '{{ $.Role.Guest.Id }}'
+      #####
+
+    # Guest
+    - user_id: '{{ $.User.Guest.Id }}'
+      role_id: '{{ $.Role.Guest.Id }}'
+
+# Assign Permissions
+###############################################
+
+
+- model: Permission
+  rows:
+    - role_id: '{{ $.Role.Admin.Id }}'
+      service_id: '{{ $.Service.User.Id }}'
+      read: true
+      write: true
+      manage: true
+
+    - role_id: '{{ $.Role.Admin.Id }}'
+      service_id: '{{ $.Service.Docker.Id }}'
+      read: true
+      write: true
+      manage: true
+
+    - role_id: '{{ $.Role.Admin.Id }}'
+      service_id: '{{ $.Service.Packages.Id }}'
+      read: true
+      write: true
+      manage: true
+
+    - role_id: '{{ $.Role.Moderator.Id }}'
+      service_id: '{{ $.Service.Docker.Id }}'
+      read: true
+      write: true
+      manage: false
+
+    - role_id: '{{ $.Role.Moderator.Id }}'
+      service_id: '{{ $.Service.Packages.Id }}'
+      read: true
+      write: true
+      manage: false
+
+    - role_id: '{{ $.Role.Guest.Id }}'
+      service_id: '{{ $.Service.Home.Id }}'
+      read: true
+      write: false
+      manage: false
+
+
