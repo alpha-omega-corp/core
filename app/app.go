@@ -87,32 +87,60 @@ func (app *App) newGrpcCommand(init func(config *Config, db *bun.DB, grpc *grpc.
 
 func (app *App) newHttpCommand(init func(configHandler *ConfigHandler, router *bunrouter.Router)) *cli.Command {
 	return app.createCommand("app", "server", func(ctx context.Context, cmd *cli.Command) {
-		NewApp(app.fs, "user").
-			CreateApp(func(config *Config, db *bun.DB, grpc *grpc.Server) {
-				auth := NewAuthWrapper(config.Env.GetString("secret"))
-				proto.RegisterAuthServiceServer(grpc, NewAuthServer(db, auth))
-			}, []interface{}{
-				(*models.UserToRole)(nil),
-				(*models.User)(nil),
-				(*models.Role)(nil),
-				(*models.Service)(nil),
-				(*models.Permission)(nil),
-			}...)
 
-		HTTP(*app.configHandler, func(router *bunrouter.Router) {
-			router.Use(bunrouterotel.NewMiddleware())
-			router.Use(NewCorsMiddleware())
+		app.models = append(app.models, []interface{}{
+			(*models.UserToRole)(nil),
+			(*models.User)(nil),
+			(*models.Role)(nil),
+			(*models.Service)(nil),
+			(*models.Permission)(nil),
+		}...)
+
+		env := cmd.String("env")
+		app.loadConfig(env, app.name)
+
+		if app.configHandler.config.Dsn != nil {
+			app.dbHandler = NewStorageHandler(*app.configHandler.config.Dsn)
+			app.dbHandler.Database().RegisterModel(app.models...)
+		}
+
+		userURL := app.configHandler.config.Env.GetString("user_url")
+		userDSN := app.configHandler.config.Env.GetString("user_dsn")
+
+		userConfigHandler := &ConfigHandler{
+			name: "user",
+			config: &Config{
+				Url: &userURL,
+				Dsn: &userDSN,
+				Env: app.configHandler.config.Env,
+			},
+		}
+
+		fmt.Println(app.configHandler.config.Url)
+		*userConfigHandler.config.Dsn = userConfigHandler.config.Env.GetString("user_dsn")
+
+		go func() {
+			if err := GRPC(*userConfigHandler, app.dbHandler, func(db *bun.DB, grpc *grpc.Server) {
+				auth := NewAuthWrapper(userConfigHandler.config.Env.GetString("user_secret"))
+				proto.RegisterAuthServiceServer(grpc, NewAuthServer(db, auth))
+			}); err != nil {
+				panic(err)
+			}
+		}()
+
+		fmt.Print(*app.configHandler.config.Url)
+
+		HTTP(*app.configHandler, func(r *bunrouter.Router) {
+			r.Use(bunrouterotel.NewMiddleware())
+			r.Use(NewCorsMiddleware())
 
 			// Register user client
-			configUser, err := app.configHandler.WithConfig("user")
-			if err != nil {
-				log.Fatal(err)
-			}
-			userClient := RegisterAuthClient(NewAuthClient(configUser), router)
-			router.Use(NewAuthMiddleware(userClient).Auth)
+			userClient := RegisterAuthClient(NewAuthClient(NewClient(userConfigHandler.config, proto.NewAuthServiceClient)), r)
+			r.Use(NewAuthMiddleware(userClient).Auth)
 
-			init(app.configHandler, router)
+			init(app.configHandler, r)
 		})
+
 	})
 }
 

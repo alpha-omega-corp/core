@@ -9,7 +9,6 @@ import (
 	"github.com/alpha-omega-corp/core/httputils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bunrouter"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"net/http"
 	"strings"
@@ -70,14 +69,8 @@ type authClient struct {
 	service proto.AuthServiceClient
 }
 
-func NewAuthClient(c *Config) AuthClient {
-	conn, err := grpc.NewClient(*c.Url, grpc.WithInsecure())
-
-	if err != nil {
-		fmt.Println("Could not connect:", err)
-	}
-
-	return &authClient{service: proto.NewAuthServiceClient(conn)}
+func NewAuthClient(client proto.AuthServiceClient) AuthClient {
+	return &authClient{service: client}
 }
 
 func (c *authClient) Login(w http.ResponseWriter, req bunrouter.Request) error {

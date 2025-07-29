@@ -9,7 +9,7 @@ import (
 )
 
 func GRPC(configHandler ConfigHandler, dbHandler *StorageHandler, init func(db *bun.DB, grpc *grpc.Server)) error {
-	config := configHandler.GetConfig()
+	config := configHandler.config
 
 	listen, err := net.Listen("tcp", *config.Url)
 
@@ -34,4 +34,14 @@ func GRPC(configHandler ConfigHandler, dbHandler *StorageHandler, init func(db *
 
 	fmt.Printf("running at tcp://%v", *config.Url)
 	return srv.Serve(listen)
+}
+
+func NewClient[T any](c *Config, proto func(conn grpc.ClientConnInterface) T) T {
+	conn, err := grpc.NewClient(*c.Url, grpc.WithInsecure())
+
+	if err != nil {
+		fmt.Printf("Could not connect to %v: %v", *c.Url, err)
+	}
+
+	return proto(conn)
 }

@@ -35,7 +35,6 @@ func HTTP(configHandler ConfigHandler, init func(router *bunrouter.Router)) {
 
 	go func() {
 		if err := httpSrv.ListenAndServe(); err != nil && err.Error() != "http: Server closed" {
-
 			log.Fatalf("ListenAndServe failed: %s", err)
 		}
 	}()

@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/spf13/viper"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -17,7 +18,7 @@ var Environment = map[string]string{
 }
 
 func GetConfigPath(env string) string {
-	path := "config/config." + Environment[env] + ".yaml"
+	path := "config/config." + Environment[env] + ".yml"
 
 	return path
 }
@@ -93,13 +94,13 @@ func (h *ConfigHandler) GetConfig() *Config {
 	return h.config
 }
 
-func (h *ConfigHandler) WithConfig(name string) (*Config, error) {
+func (h *ConfigHandler) WithConfig(name string) *Config {
 	config, err := h.requestConfig(name)
 	if err != nil {
-		return nil, err
+		log.Fatalf("no configuration found for application: %v\n%v", name, err.Error())
 	}
 
-	return config, nil
+	return config
 }
 
 func (h *ConfigHandler) requestConfig(name string) (config *Config, err error) {
@@ -132,4 +133,19 @@ func (h *ConfigHandler) get(key string, format string) (err error) {
 	err = h.viper.ReadRemoteConfig()
 
 	return
+}
+
+func deepCopyConfig(original *ConfigHandler) (*ConfigHandler, error) {
+	data, err := json.Marshal(original)
+	if err != nil {
+		return nil, err
+	}
+
+	var duplicate ConfigHandler
+	err = json.Unmarshal(data, &duplicate)
+	if err != nil {
+		return nil, err
+	}
+
+	return &duplicate, nil
 }
