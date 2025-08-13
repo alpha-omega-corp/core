@@ -8,10 +8,10 @@ require (
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/rs/cors v1.11.1
 	github.com/spf13/viper v1.20.1
-	github.com/uptrace/bun v1.2.14
+	github.com/uptrace/bun v1.2.15
 	github.com/uptrace/bun/dbfixture v1.2.14
 	github.com/uptrace/bun/dialect/pgdialect v1.2.14
-	github.com/uptrace/bun/driver/pgdriver v1.2.14
+	github.com/uptrace/bun/driver/pgdriver v1.2.15
 	github.com/uptrace/bun/extra/bundebug v1.2.14
 	github.com/uptrace/bunrouter v1.0.23
 	github.com/uptrace/bunrouter/extra/bunrouterotel v1.0.23
