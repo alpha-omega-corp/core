@@ -14,23 +14,6 @@ import (
 	"strings"
 )
 
-type AuthClient interface {
-	Login(w http.ResponseWriter, req bunrouter.Request) error
-	Validate(w http.ResponseWriter, req bunrouter.Request) error
-	Register(w http.ResponseWriter, req bunrouter.Request) error
-	GetUsers(w http.ResponseWriter, req bunrouter.Request) error
-	CreateUser(w http.ResponseWriter, req bunrouter.Request) error
-	UpdateUser(w http.ResponseWriter, req bunrouter.Request) error
-	DeleteUser(w http.ResponseWriter, req bunrouter.Request) error
-	AssignUser(w http.ResponseWriter, req bunrouter.Request) error
-	GetUserPermissions(w http.ResponseWriter, req bunrouter.Request) error
-	GetRoles(w http.ResponseWriter, req bunrouter.Request) error
-	CreateRole(w http.ResponseWriter, req bunrouter.Request) error
-	GetServices(w http.ResponseWriter, req bunrouter.Request) error
-	GetServicePermissions(w http.ResponseWriter, req bunrouter.Request) error
-	CreateServicePermissions(w http.ResponseWriter, req bunrouter.Request) error
-}
-
 type AuthServer struct {
 	proto.UnimplementedAuthServiceServer
 
@@ -45,32 +28,27 @@ func NewAuthServer(db *bun.DB, aw *AuthWrapper) *AuthServer {
 	}
 }
 
-func RegisterAuthClient(client AuthClient, r *bunrouter.Router) AuthClient {
-	r.GET("/users", client.GetUsers)
-	r.POST("/users", client.CreateUser)
-	r.PUT("/users/:id", client.UpdateUser)
-	r.DELETE("/users/:id", client.DeleteUser)
-	r.POST("/users/roles", client.AssignUser)
-	r.GET("/users/:id/permissions", client.GetUserPermissions)
-	r.GET("/auth/roles", client.GetRoles)
-	r.POST("/auth/roles", client.CreateRole)
-	r.GET("/auth/services", client.GetServices)
-	r.GET("/auth/services/:id/permissions", client.GetServicePermissions)
-	r.POST("/auth/services/permissions", client.CreateServicePermissions)
-	r.POST("/auth/login", client.Login)
-	r.POST("/auth/register", client.Register)
-	r.POST("/auth/validate", client.Validate)
-
-	return client
-}
-
 type authClient struct {
-	AuthClient
 	service proto.AuthServiceClient
 }
 
-func NewAuthClient(client proto.AuthServiceClient) AuthClient {
-	return &authClient{service: client}
+func NewAuthClient(r *bunrouter.Router) {
+	sc := &authClient{service: NewClient("localhost:50050", proto.NewAuthServiceClient).Service()}
+
+	r.GET("/users", sc.GetUsers)
+	r.POST("/users", sc.CreateUser)
+	r.PUT("/users/:id", sc.UpdateUser)
+	r.DELETE("/users/:id", sc.DeleteUser)
+	r.POST("/users/roles", sc.AssignUser)
+	r.GET("/users/:id/permissions", sc.GetUserPermissions)
+	r.GET("/auth/roles", sc.GetRoles)
+	r.POST("/auth/roles", sc.CreateRole)
+	r.GET("/auth/services", sc.GetServices)
+	r.GET("/auth/services/:id/permissions", sc.GetServicePermissions)
+	r.POST("/auth/services/permissions", sc.CreatePermission)
+	r.POST("/auth/login", sc.Login)
+	r.POST("/auth/register", sc.Register)
+	r.POST("/auth/validate", sc.Validate)
 }
 
 func (c *authClient) Login(w http.ResponseWriter, req bunrouter.Request) error {

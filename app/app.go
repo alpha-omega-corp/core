@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"github.com/alpha-omega-corp/core/app/models"
 	"github.com/alpha-omega-corp/core/app/proto"
-	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dbfixture"
 	"github.com/uptrace/bun/migrate"
 	"github.com/uptrace/bunrouter"
 	"github.com/uptrace/bunrouter/extra/bunrouterotel"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/grpc"
+	"io/fs"
 	"log"
 	"os"
 	"os/signal"
@@ -23,19 +23,142 @@ type App struct {
 	name          string
 	dbHandler     *StorageHandler
 	configHandler *ConfigHandler
+	config        *Config
 	models        []any
 
 	fs embed.FS
 }
 
-func NewApp(efs embed.FS, name string) *App {
+func NewApp(efs embed.FS) *App {
 	return &App{
-		name: name,
-		fs:   efs,
+		fs: efs,
 	}
 }
 
-func (app *App) CreateApi(init func(configHandler *ConfigHandler, router *bunrouter.Router)) os.Signal {
+// Bootstrap /* Channel to keep connection alive */
+func (app *App) Bootstrap(m ...any) os.Signal {
+	app.models = append(app.models, append(m,
+		(*models.UserToRole)(nil),
+		(*models.User)(nil),
+		(*models.Role)(nil),
+		(*models.Service)(nil),
+		(*models.Permission)(nil),
+	)...)
+
+	appCli := &cli.Command{
+		Usage: "application cli",
+		Commands: []*cli.Command{
+			app.serverCommand(),
+			app.migrationCommand(),
+		},
+	}
+
+	if err := appCli.Run(context.Background(), os.Args); err != nil {
+		log.Fatalf("app start error: %v\n", err)
+	}
+
+	// Create keyboard listener
+	ch := make(chan os.Signal, 3)
+	signal.Notify(
+		ch,
+		syscall.SIGINT,
+		syscall.SIGQUIT,
+		syscall.SIGTERM,
+	)
+
+	return <-ch
+}
+
+func (app *App) serverCommand() *cli.Command {
+	return app.createCommand("app", "server", func(ctx context.Context, cmd *cli.Command) {
+		go func() {
+			if err := GRPC("localhost:50050", func(grpc *grpc.Server) {
+				proto.RegisterAuthServiceServer(grpc, NewAuthServer(app.dbHandler.Database(), NewAuthWrapper(app.config.Secret)))
+			}); err != nil {
+				panic(err)
+			}
+		}()
+
+		HTTP(app.config, func(r *bunrouter.Router) {
+			r.Use(bunrouterotel.NewMiddleware())
+			r.Use(NewCorsMiddleware())
+
+			//NewAuthClient(r)
+		})
+	})
+}
+
+func (app *App) migrationCommand() *cli.Command {
+	return app.createCommand("db", "migration", func(ctx context.Context, cmd *cli.Command) {
+		db := app.dbHandler.Database()
+
+		migrator := migrate.NewMigrator(db, migrate.NewMigrations())
+		if err := migrator.Init(ctx); err != nil {
+			panic(err)
+		}
+		if err := db.ResetModel(ctx, app.models...); err != nil {
+			panic(err)
+		}
+
+		fixture := dbfixture.New(db)
+		if err := fixture.Load(ctx, os.DirFS("cmd/fixtures"), "fixture.yml"); err != nil {
+			fmt.Printf("load fixture error: %v\n", err)
+			panic(err)
+		}
+	})
+}
+
+func (app *App) createCommand(category string, name string, action func(ctx context.Context, cmd *cli.Command)) *cli.Command {
+	return &cli.Command{
+		Name:     name,
+		Category: category,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if err := app.loadConfig(); err != nil {
+				panic(err)
+			}
+
+			config, err := app.configHandler.DefaultConfig()
+			if err != nil {
+				return err
+			}
+
+			app.config = config
+			app.dbHandler = NewStorageHandler(app.config.Dsn)
+			app.dbHandler.Database().RegisterModel(app.models...)
+
+			action(ctx, cmd)
+
+			return nil
+		},
+	}
+}
+
+func (app *App) loadConfig() error {
+	app.configHandler = NewConfigHandler("http://localhost:2379")
+
+	return fs.WalkDir(app.fs, ".", func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+
+		file, err := app.fs.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		if err := app.configHandler.Write(context.Background(), path, file); err != nil {
+			return err
+		}
+
+		app.configHandler.paths = append(app.configHandler.paths, path)
+
+		return nil
+	})
+}
+
+/*
+
+func (app *App) CreateHttp(init func(configHandler *ConfigHandler, router *bunrouter.Router)) *App {
 	appCli := &cli.Command{
 		Usage: "cloud application cli",
 		Commands: []*cli.Command{
@@ -56,23 +179,24 @@ func (app *App) CreateApi(init func(configHandler *ConfigHandler, router *bunrou
 		syscall.SIGTERM,
 	)
 
-	return <-ch
+	return app
 }
-
-func (app *App) CreateApp(init func(config *Config, db *bun.DB, grpc *grpc.Server), models ...any) {
+func (app *App) CreateGrpc(init func(config *Config, db *bun.DB, grpc *grpc.Server), models ...any) *App {
 	app.models = append(app.models, models...)
 
 	appCli := &cli.Command{
 		Usage: "cloud application cli",
 		Commands: []*cli.Command{
 			app.newGrpcCommand(init),
-			app.migrateCommand(),
+			app.migrationCommand(),
 		},
 	}
 
 	if err := appCli.Run(context.Background(), os.Args); err != nil {
 		log.Fatalf("app start error: %v\n", err)
 	}
+
+	return app
 }
 
 func (app *App) newGrpcCommand(init func(config *Config, db *bun.DB, grpc *grpc.Server)) *cli.Command {
@@ -87,7 +211,6 @@ func (app *App) newGrpcCommand(init func(config *Config, db *bun.DB, grpc *grpc.
 
 func (app *App) newHttpCommand(init func(configHandler *ConfigHandler, router *bunrouter.Router)) *cli.Command {
 	return app.createCommand("app", "server", func(ctx context.Context, cmd *cli.Command) {
-
 		app.models = append(app.models, []interface{}{
 			(*models.UserToRole)(nil),
 			(*models.User)(nil),
@@ -96,8 +219,7 @@ func (app *App) newHttpCommand(init func(configHandler *ConfigHandler, router *b
 			(*models.Permission)(nil),
 		}...)
 
-		env := cmd.String("env")
-		app.loadConfig(env, app.name)
+		app.loadConfig()
 
 		if app.configHandler.config.Dsn != nil {
 			app.dbHandler = NewStorageHandler(*app.configHandler.config.Dsn)
@@ -143,60 +265,4 @@ func (app *App) newHttpCommand(init func(configHandler *ConfigHandler, router *b
 
 	})
 }
-
-func (app *App) migrateCommand() *cli.Command {
-	return app.createCommand("db", "migration", func(ctx context.Context, cmd *cli.Command) {
-		db := app.dbHandler.Database()
-
-		migrator := migrate.NewMigrator(db, migrate.NewMigrations())
-		if err := migrator.Init(ctx); err != nil {
-			panic(err)
-		}
-		if err := db.ResetModel(ctx, app.models...); err != nil {
-			panic(err)
-		}
-
-		fixture := dbfixture.New(db)
-		if err := fixture.Load(ctx, os.DirFS("cmd/fixtures"), "fixture.yml"); err != nil {
-			fmt.Printf("load fixture error: %v\n", err)
-			panic(err)
-		}
-	})
-}
-
-func (app *App) loadConfig(env string, name string) {
-	configFile, err := app.fs.ReadFile(GetConfigPath(env))
-	if err != nil {
-		log.Fatalf("read config file error: %v\n", err)
-	}
-
-	app.configHandler = NewConfigHandler(context.Background(), name, configFile)
-}
-
-func (app *App) createCommand(category string, name string, action func(ctx context.Context, cmd *cli.Command)) *cli.Command {
-	return &cli.Command{
-		Name:     name,
-		Category: category,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "env",
-				Aliases: []string{"e"},
-				Value:   "local",
-				Usage:   "environment to select configuration file",
-			},
-		},
-		Action: func(ctx context.Context, cmd *cli.Command) error {
-			env := cmd.String("env")
-			app.loadConfig(env, app.name)
-
-			if app.configHandler.config.Dsn != nil {
-				app.dbHandler = NewStorageHandler(*app.configHandler.config.Dsn)
-				app.dbHandler.Database().RegisterModel(app.models...)
-			}
-
-			action(ctx, cmd)
-
-			return nil
-		},
-	}
-}
+*/

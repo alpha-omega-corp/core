@@ -6,6 +6,7 @@ import (
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/driver/pgdriver"
 	"github.com/uptrace/bun/extra/bundebug"
+	"log"
 	"sync"
 )
 
@@ -39,6 +40,13 @@ func (h *StorageHandler) Database() *bun.DB {
 
 		h.db = db
 	})
+
+	defer func(db *bun.DB) {
+		err := db.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}(h.db)
 
 	return h.db
 }

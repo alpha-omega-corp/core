@@ -7,10 +7,10 @@ import (
 )
 
 type AuthMiddleware struct {
-	authClient AuthClient
+	authClient authClient
 }
 
-func NewAuthMiddleware(client AuthClient) *AuthMiddleware {
+func NewAuthMiddleware(client authClient) *AuthMiddleware {
 	return &AuthMiddleware{
 		authClient: client,
 	}

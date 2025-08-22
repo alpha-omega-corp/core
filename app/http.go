@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func HTTP(configHandler ConfigHandler, init func(router *bunrouter.Router)) {
+func HTTP(config *Config, init func(router *bunrouter.Router)) {
 	r := bunrouter.New(
 		bunrouter.WithMiddleware(reqlog.NewMiddleware(
 			reqlog.WithEnabled(true),
@@ -26,7 +26,7 @@ func HTTP(configHandler ConfigHandler, init func(router *bunrouter.Router)) {
 
 	handler := otelhttp.NewHandler(r, "")
 	httpSrv := &http.Server{
-		Addr:         *configHandler.GetConfig().Url,
+		Addr:         config.Url,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,

@@ -2,46 +2,40 @@ package app
 
 import (
 	"fmt"
-	"github.com/uptrace/bun"
 	"google.golang.org/grpc"
-	"log"
 	"net"
 )
 
-func GRPC(configHandler ConfigHandler, dbHandler *StorageHandler, init func(db *bun.DB, grpc *grpc.Server)) error {
-	config := configHandler.config
+type Client[T any] struct {
+	conn    grpc.ClientConnInterface
+	service T
+}
 
-	listen, err := net.Listen("tcp", *config.Url)
+func NewClient[T any](target string, serviceConstructor func(conn grpc.ClientConnInterface) T) *Client[T] {
+	conn, err := grpc.NewClient(target, grpc.WithInsecure())
+	if err != nil {
+		fmt.Printf("Could not connect to %v: %v", target, err)
+	}
 
+	return &Client[T]{
+		service: serviceConstructor(conn),
+		conn:    conn,
+	}
+}
+
+func (c *Client[T]) Service() T {
+	return c.service
+}
+
+func GRPC(address string, init func(grpc *grpc.Server)) error {
+	listen, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
 
 	srv := grpc.NewServer()
-	if dbHandler != nil {
-		db := dbHandler.Database()
-		defer func(db *bun.DB) {
-			err := db.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(db)
+	init(srv)
 
-		init(db, srv)
-	} else {
-		init(nil, srv)
-	}
-
-	fmt.Printf("running at tcp://%v", *config.Url)
+	fmt.Printf("running at tcp://%v", address)
 	return srv.Serve(listen)
-}
-
-func NewClient[T any](c *Config, proto func(conn grpc.ClientConnInterface) T) T {
-	conn, err := grpc.NewClient(*c.Url, grpc.WithInsecure())
-
-	if err != nil {
-		fmt.Printf("Could not connect to %v: %v", *c.Url, err)
-	}
-
-	return proto(conn)
 }
