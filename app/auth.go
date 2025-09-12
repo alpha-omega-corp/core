@@ -4,14 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/alpha-omega-corp/core/app/models"
 	"github.com/alpha-omega-corp/core/app/proto"
 	"github.com/alpha-omega-corp/core/httputils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bunrouter"
 	"google.golang.org/protobuf/types/known/emptypb"
-	"net/http"
-	"strings"
 )
 
 type AuthServer struct {
@@ -36,11 +37,12 @@ func NewAuthClient(r *bunrouter.Router) {
 	sc := &authClient{service: NewClient("localhost:50050", proto.NewAuthServiceClient).Service()}
 
 	r.GET("/users", sc.GetUsers)
-	r.POST("/users", sc.CreateUser)
-	r.PUT("/users/:id", sc.UpdateUser)
-	r.DELETE("/users/:id", sc.DeleteUser)
-	r.POST("/users/roles", sc.AssignUser)
-	r.GET("/users/:id/permissions", sc.GetUserPermissions)
+	r.POST("/user", sc.CreateUser)
+	r.PUT("/user/:id", sc.UpdateUser)
+	r.DELETE("/user/:id", sc.DeleteUser)
+	r.POST("/user/roles", sc.AssignUser)
+	r.GET("/user/:id/permissions", sc.GetUserPermissions)
+
 	r.GET("/auth/roles", sc.GetRoles)
 	r.POST("/auth/roles", sc.CreateRole)
 	r.GET("/auth/services", sc.GetServices)
@@ -52,7 +54,7 @@ func NewAuthClient(r *bunrouter.Router) {
 }
 
 func (c *authClient) Login(w http.ResponseWriter, req bunrouter.Request) error {
-	return httputils.Response(w, func() (*proto.LoginResponse, error) {
+	return httputils.Response(w, func() (*proto.User, error) {
 		data := httputils.GetBody[proto.LoginRequest](w, req)
 
 		return c.service.Login(req.Context(), data)
@@ -79,7 +81,7 @@ func (c *authClient) Register(w http.ResponseWriter, req bunrouter.Request) erro
 }
 
 func (c *authClient) GetUsers(w http.ResponseWriter, req bunrouter.Request) error {
-	return httputils.Response[proto.GetUsersResponse](w, func() (*proto.GetUsersResponse, error) {
+	return httputils.Response(w, func() (*proto.GetUsersResponse, error) {
 		return c.service.GetUsers(req.Context(), &emptypb.Empty{})
 	})
 }
@@ -143,9 +145,7 @@ func (c *authClient) CreatePermission(w http.ResponseWriter, req bunrouter.Reque
 
 func (c *authClient) GetUserPermissions(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.GetUserPermissionsResponse, error) {
-		data := httputils.GetBody[proto.GetUserPermissionsRequest](w, req)
-
-		return c.service.GetUserPermissions(req.Context(), data)
+		return c.service.GetUserPermissions(req.Context(), httputils.GetParams[proto.GetOneRequest](w, req))
 	})
 }
 
@@ -240,12 +240,12 @@ func (s *AuthServer) DeleteUser(ctx context.Context, req *proto.DeleteUserReques
 	}, nil
 }
 
-func (s *AuthServer) GetUserPermissions(ctx context.Context, req *proto.GetUserPermissionsRequest) (*proto.GetUserPermissionsResponse, error) {
+func (s *AuthServer) GetUserPermissions(ctx context.Context, req *proto.GetOneRequest) (*proto.GetUserPermissionsResponse, error) {
 	user := new(models.User)
 	if err := s.db.NewSelect().
 		Model(user).
 		Relation("Roles").
-		Where("id = ?", req.UserId).
+		Where("id = ?", req.Id).
 		Scan(ctx); err != nil {
 		return nil, err
 	}
@@ -464,7 +464,7 @@ func (s *AuthServer) CreateServicePermissions(ctx context.Context, req *proto.Cr
 	}, nil
 }
 
-func (s *AuthServer) Login(ctx context.Context, req *proto.LoginRequest) (*proto.LoginResponse, error) {
+func (s *AuthServer) Login(ctx context.Context, req *proto.LoginRequest) (*proto.User, error) {
 	var user models.User
 
 	if err := s.db.
@@ -486,12 +486,10 @@ func (s *AuthServer) Login(ctx context.Context, req *proto.LoginRequest) (*proto
 		return nil, err
 	}
 
-	return &proto.LoginResponse{
+	return &proto.User{
+		Id:    user.Id,
+		Email: user.Email,
 		Token: token,
-		User: &proto.User{
-			Id:    user.Id,
-			Email: user.Email,
-		},
 	}, nil
 }
 func (s *AuthServer) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterResponse, error) {

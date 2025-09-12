@@ -2,8 +2,9 @@ package app
 
 import (
 	"fmt"
-	"google.golang.org/grpc"
 	"net"
+
+	"google.golang.org/grpc"
 )
 
 type Client[T any] struct {
@@ -36,6 +37,6 @@ func GRPC(address string, init func(grpc *grpc.Server)) error {
 	srv := grpc.NewServer()
 	init(srv)
 
-	fmt.Printf("running at tcp://%v", address)
+	fmt.Printf("running at tcp://%v\n", address)
 	return srv.Serve(listen)
 }

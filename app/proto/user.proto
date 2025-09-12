@@ -5,7 +5,7 @@ option go_package = "github.com/alpha-omega-corp/cloud/user/pkg/proto";
 import "google/protobuf/empty.proto";
 
 service AuthService {
-  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Login(LoginRequest) returns (User) {}
   rpc Register(RegisterRequest) returns (RegisterResponse) {}
   rpc Validate(ValidateRequest) returns (ValidateResponse) {}
 
@@ -14,7 +14,7 @@ service AuthService {
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {}
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {}
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
-  rpc GetUserPermissions(GetUserPermissionsRequest) returns (GetUserPermissionsResponse) {}
+  rpc GetUserPermissions(GetOneRequest) returns (GetUserPermissionsResponse) {}
 
   rpc GetRoles(google.protobuf.Empty) returns (GetRolesResponse) {}
   rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse) {}
@@ -23,6 +23,18 @@ service AuthService {
   rpc GetServices(google.protobuf.Empty) returns (GetServicesResponse) {}
   rpc GetServicePermissions(GetServicePermissionsRequest) returns (GetServicePermissionsResponse) {}
   rpc CreateServicePermissions(CreateServicePermissionsRequest) returns (CreateServicePermissionsResponse) {}
+}
+
+message GetOneRequest {
+  int64 id = 1;
+}
+
+message User {
+  int64 id = 1;
+  string email = 3;
+  string name = 4;
+  repeated Role roles = 5;
+  string token = 6;
 }
 
 message GetUserPermissionsRequest {
@@ -146,13 +158,6 @@ message CreateRoleRequest {
 message CreateRoleResponse {
   int64 status = 1;
   string error = 2;
-}
-
-message User {
-  int64 id = 1;
-  string email = 2;
-  string name = 3;
-  repeated Role roles = 4;
 }
 
 message RegisterRequest {

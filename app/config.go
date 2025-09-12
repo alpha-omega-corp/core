@@ -3,12 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
+	"time"
+
 	"github.com/spf13/viper"
 	_ "github.com/spf13/viper/remote"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc/connectivity"
-	"log"
-	"time"
 )
 
 type Config struct {

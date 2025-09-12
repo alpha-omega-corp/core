@@ -2,9 +2,11 @@ package httputils
 
 import (
 	"encoding/json"
-	"github.com/uptrace/bunrouter"
 	"log"
 	"net/http"
+	"strconv"
+
+	"github.com/uptrace/bunrouter"
 )
 
 func JSON[T any](w http.ResponseWriter, res *T, err error) error {
@@ -21,7 +23,20 @@ func Response[T any](w http.ResponseWriter, req func() (*T, error)) error {
 }
 
 func GetParams[T any](w http.ResponseWriter, req bunrouter.Request) *T {
-	params, err := json.Marshal(req.Params().Map())
+	paramsMap := req.Params().Map()
+	paramsData := make(map[string]interface{}, len(paramsMap))
+
+	for key, value := range paramsMap {
+		paramsData[key] = value
+	}
+
+	if idStr, ok := paramsData["id"].(string); ok {
+		if idInt, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+			paramsData["id"] = idInt
+		}
+	}
+
+	params, err := json.Marshal(paramsData)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 	}

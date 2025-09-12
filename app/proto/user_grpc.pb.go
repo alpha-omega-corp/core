@@ -41,7 +41,7 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuthServiceClient interface {
-	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
+	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*User, error)
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
 	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*ValidateResponse, error)
 	GetUsers(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetUsersResponse, error)
@@ -49,7 +49,7 @@ type AuthServiceClient interface {
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error)
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UpdateUserResponse, error)
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserResponse, error)
-	GetUserPermissions(ctx context.Context, in *GetUserPermissionsRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error)
+	GetUserPermissions(ctx context.Context, in *GetOneRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error)
 	GetRoles(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetRolesResponse, error)
 	CreateRole(ctx context.Context, in *CreateRoleRequest, opts ...grpc.CallOption) (*CreateRoleResponse, error)
 	AssignRole(ctx context.Context, in *AssignRoleRequest, opts ...grpc.CallOption) (*AssignRoleResponse, error)
@@ -66,9 +66,9 @@ func NewAuthServiceClient(cc grpc.ClientConnInterface) AuthServiceClient {
 	return &authServiceClient{cc}
 }
 
-func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
+func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*User, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LoginResponse)
+	out := new(User)
 	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -146,7 +146,7 @@ func (c *authServiceClient) DeleteUser(ctx context.Context, in *DeleteUserReques
 	return out, nil
 }
 
-func (c *authServiceClient) GetUserPermissions(ctx context.Context, in *GetUserPermissionsRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error) {
+func (c *authServiceClient) GetUserPermissions(ctx context.Context, in *GetOneRequest, opts ...grpc.CallOption) (*GetUserPermissionsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetUserPermissionsResponse)
 	err := c.cc.Invoke(ctx, AuthService_GetUserPermissions_FullMethodName, in, out, cOpts...)
@@ -220,7 +220,7 @@ func (c *authServiceClient) CreateServicePermissions(ctx context.Context, in *Cr
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
 type AuthServiceServer interface {
-	Login(context.Context, *LoginRequest) (*LoginResponse, error)
+	Login(context.Context, *LoginRequest) (*User, error)
 	Register(context.Context, *RegisterRequest) (*RegisterResponse, error)
 	Validate(context.Context, *ValidateRequest) (*ValidateResponse, error)
 	GetUsers(context.Context, *emptypb.Empty) (*GetUsersResponse, error)
@@ -228,7 +228,7 @@ type AuthServiceServer interface {
 	CreateUser(context.Context, *CreateUserRequest) (*CreateUserResponse, error)
 	UpdateUser(context.Context, *UpdateUserRequest) (*UpdateUserResponse, error)
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error)
-	GetUserPermissions(context.Context, *GetUserPermissionsRequest) (*GetUserPermissionsResponse, error)
+	GetUserPermissions(context.Context, *GetOneRequest) (*GetUserPermissionsResponse, error)
 	GetRoles(context.Context, *emptypb.Empty) (*GetRolesResponse, error)
 	CreateRole(context.Context, *CreateRoleRequest) (*CreateRoleResponse, error)
 	AssignRole(context.Context, *AssignRoleRequest) (*AssignRoleResponse, error)
@@ -245,7 +245,7 @@ type AuthServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuthServiceServer struct{}
 
-func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
+func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*User, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
 func (UnimplementedAuthServiceServer) Register(context.Context, *RegisterRequest) (*RegisterResponse, error) {
@@ -269,7 +269,7 @@ func (UnimplementedAuthServiceServer) UpdateUser(context.Context, *UpdateUserReq
 func (UnimplementedAuthServiceServer) DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteUser not implemented")
 }
-func (UnimplementedAuthServiceServer) GetUserPermissions(context.Context, *GetUserPermissionsRequest) (*GetUserPermissionsResponse, error) {
+func (UnimplementedAuthServiceServer) GetUserPermissions(context.Context, *GetOneRequest) (*GetUserPermissionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserPermissions not implemented")
 }
 func (UnimplementedAuthServiceServer) GetRoles(context.Context, *emptypb.Empty) (*GetRolesResponse, error) {
@@ -456,7 +456,7 @@ func _AuthService_DeleteUser_Handler(srv interface{}, ctx context.Context, dec f
 }
 
 func _AuthService_GetUserPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUserPermissionsRequest)
+	in := new(GetOneRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func _AuthService_GetUserPermissions_Handler(srv interface{}, ctx context.Contex
 		FullMethod: AuthService_GetUserPermissions_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).GetUserPermissions(ctx, req.(*GetUserPermissionsRequest))
+		return srv.(AuthServiceServer).GetUserPermissions(ctx, req.(*GetOneRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
