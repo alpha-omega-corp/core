@@ -4,6 +4,13 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/alpha-omega-corp/core/app/models"
 	"github.com/alpha-omega-corp/core/app/proto"
 	"github.com/uptrace/bun"
@@ -13,11 +20,6 @@ import (
 	"github.com/uptrace/bunrouter/extra/bunrouterotel"
 	"github.com/urfave/cli/v3"
 	"google.golang.org/grpc"
-	"io/fs"
-	"log"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type App struct {
@@ -40,7 +42,7 @@ func CreateClient[T any](serviceConstructor func(conn grpc.ClientConnInterface) 
 	return NewClient("localhost:50051", serviceConstructor).Service()
 }
 
-// Bootstrap /* Channel to keep connection alive */
+// Bootstrap /* Channel to keep the connection alive */
 func (app *App) Bootstrap(start func(db *bun.DB, router *bunrouter.Router, conn *grpc.Server), m ...any) os.Signal {
 	app.models = append(app.models, append(m,
 		(*models.UserToRole)(nil),
@@ -76,10 +78,12 @@ func (app *App) Bootstrap(start func(db *bun.DB, router *bunrouter.Router, conn 
 
 func (app *App) serverCommand(start func(db *bun.DB, router *bunrouter.Router, conn *grpc.Server)) *cli.Command {
 	return app.createCommand("app", "server", func(ctx context.Context, cmd *cli.Command) {
-
-		HTTP(app.config, func(router *bunrouter.Router) {
+		CreateHTTP(app.config, func(router *bunrouter.Router) {
 			router.Use(bunrouterotel.NewMiddleware())
 			router.Use(NewCorsMiddleware())
+
+			// Serve static files from local storage directory
+			router.GET("/storage/*path", bunrouter.HTTPHandler(http.StripPrefix("/storage/", http.FileServer(http.Dir("storage")))))
 
 			NewAuthClient(router)
 
@@ -91,6 +95,7 @@ func (app *App) serverCommand(start func(db *bun.DB, router *bunrouter.Router, c
 				}
 			}()
 
+			// Application start --> start() callback
 			go func() {
 				if err := GRPC("localhost:50051", func(grpc *grpc.Server) {
 					start(app.dbHandler.Database(), router, grpc)

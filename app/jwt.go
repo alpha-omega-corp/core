@@ -2,16 +2,16 @@ package app
 
 import (
 	"errors"
-	"github.com/alpha-omega-corp/core/app/models"
-	"github.com/golang-jwt/jwt"
-	"golang.org/x/crypto/bcrypt"
 	"time"
+
+	"github.com/alpha-omega-corp/core/app/proto"
+	jwt "github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthClaims struct {
-	jwt.StandardClaims
-	Id    int64
-	Email string
+	jwt.Claims
+	User *proto.User
 }
 
 type AuthWrapper struct {
@@ -21,25 +21,17 @@ type AuthWrapper struct {
 }
 
 func NewAuthWrapper(key string) *AuthWrapper {
+
 	return &AuthWrapper{
 		secretKey: key,
 		expiresAt: 24,
-
-		provider: "auth-svc",
 	}
 }
 
-func (w *AuthWrapper) GenerateToken(user models.User) (signedToken string, err error) {
-	claims := &AuthClaims{
-		Id:    user.Id,
-		Email: user.Email,
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: time.Now().Local().Add(time.Hour * time.Duration(w.expiresAt)).Unix(),
-			Issuer:    w.provider,
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+func (w *AuthWrapper) GenerateToken(user *proto.User) (signedToken string, err error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, &AuthClaims{
+		User: user,
+	})
 
 	signedToken, err = token.SignedString([]byte(w.secretKey))
 
@@ -69,7 +61,12 @@ func (w *AuthWrapper) ValidateToken(signedToken string) (claims *AuthClaims, err
 		return nil, errors.New("unable to parse claims")
 	}
 
-	if claims.ExpiresAt < time.Now().Local().Unix() {
+	expiresAt, err := claims.GetExpirationTime()
+	if err != nil {
+		return nil, err
+	}
+
+	if expiresAt.Unix() < time.Now().Local().Unix() {
 		return nil, errors.New("token is expired")
 	}
 

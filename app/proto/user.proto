@@ -37,6 +37,11 @@ message User {
   string token = 6;
 }
 
+message Role {
+  int64 id = 1;
+  string name = 2;
+}
+
 message GetUserPermissionsRequest {
   int64 userId = 1;
 }
@@ -181,10 +186,7 @@ message LoginResponse {
   User user = 2;
 }
 
-message Role {
-  int64 id = 1;
-  string name = 2;
-}
+
 
 message ValidateRequest {string token = 1;}
 message ValidateResponse {User user = 1;}

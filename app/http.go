@@ -2,17 +2,18 @@ package app
 
 import (
 	"fmt"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/uptrace/bunrouter"
 	"github.com/uptrace/bunrouter/extra/bunrouterotel"
 	"github.com/uptrace/bunrouter/extra/reqlog"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"log"
-	"net/http"
-	"time"
 )
 
-func HTTP(config *Config, init func(router *bunrouter.Router)) {
-	r := bunrouter.New(
+func CreateHTTP(config *Config, init func(router *bunrouter.Router)) {
+	router := bunrouter.New(
 		bunrouter.WithMiddleware(reqlog.NewMiddleware(
 			reqlog.WithEnabled(true),
 			reqlog.WithVerbose(true),
@@ -22,9 +23,9 @@ func HTTP(config *Config, init func(router *bunrouter.Router)) {
 			bunrouterotel.WithClientIP(),
 		)))
 
-	init(r)
+	init(router)
 
-	handler := otelhttp.NewHandler(r, "")
+	handler := otelhttp.NewHandler(router, "")
 	httpSrv := &http.Server{
 		Addr:         config.Url,
 		ReadTimeout:  60 * time.Second,

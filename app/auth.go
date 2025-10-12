@@ -10,6 +10,7 @@ import (
 	"github.com/alpha-omega-corp/core/app/models"
 	"github.com/alpha-omega-corp/core/app/proto"
 	"github.com/alpha-omega-corp/core/httputils"
+	"github.com/alpha-omega-corp/core/utils"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bunrouter"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -18,14 +19,16 @@ import (
 type AuthServer struct {
 	proto.UnimplementedAuthServiceServer
 
-	db *bun.DB
-	aw *AuthWrapper
+	db     *bun.DB
+	aw     *AuthWrapper
+	mapper *utils.GenericMapper
 }
 
 func NewAuthServer(db *bun.DB, aw *AuthWrapper) *AuthServer {
 	return &AuthServer{
-		db: db,
-		aw: aw,
+		db:     db,
+		aw:     aw,
+		mapper: utils.NewMapper(nil),
 	}
 }
 
@@ -34,29 +37,28 @@ type authClient struct {
 }
 
 func NewAuthClient(r *bunrouter.Router) {
-	sc := &authClient{service: NewClient("localhost:50050", proto.NewAuthServiceClient).Service()}
+	svc := &authClient{service: NewClient("localhost:50050", proto.NewAuthServiceClient).Service()}
 
-	r.GET("/users", sc.GetUsers)
-	r.POST("/user", sc.CreateUser)
-	r.PUT("/user/:id", sc.UpdateUser)
-	r.DELETE("/user/:id", sc.DeleteUser)
-	r.POST("/user/roles", sc.AssignUser)
-	r.GET("/user/:id/permissions", sc.GetUserPermissions)
+	r.GET("/users", svc.GetUsers)
+	r.POST("/user", svc.CreateUser)
+	r.PUT("/user/:id", svc.UpdateUser)
+	r.DELETE("/user/:id", svc.DeleteUser)
+	r.POST("/user/roles", svc.AssignUser)
+	r.GET("/user/:id/permissions", svc.GetUserPermissions)
 
-	r.GET("/auth/roles", sc.GetRoles)
-	r.POST("/auth/roles", sc.CreateRole)
-	r.GET("/auth/services", sc.GetServices)
-	r.GET("/auth/services/:id/permissions", sc.GetServicePermissions)
-	r.POST("/auth/services/permissions", sc.CreatePermission)
-	r.POST("/auth/login", sc.Login)
-	r.POST("/auth/register", sc.Register)
-	r.POST("/auth/validate", sc.Validate)
+	r.GET("/auth/roles", svc.GetRoles)
+	r.POST("/auth/roles", svc.CreateRole)
+	r.GET("/auth/services", svc.GetServices)
+	r.GET("/auth/services/:id/permissions", svc.GetServicePermissions)
+	r.POST("/auth/services/permissions", svc.CreatePermission)
+	r.POST("/auth/login", svc.Login)
+	r.POST("/auth/register", svc.Register)
+	r.POST("/auth/validate", svc.Validate)
 }
 
 func (c *authClient) Login(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.User, error) {
 		data := httputils.GetBody[proto.LoginRequest](w, req)
-
 		return c.service.Login(req.Context(), data)
 	})
 }
@@ -65,6 +67,7 @@ func (c *authClient) Validate(w http.ResponseWriter, req bunrouter.Request) erro
 	authHeader := req.Header.Get("Authorization")
 	token := strings.Split(authHeader, "Bearer ")[1]
 
+	fmt.Println(token)
 	return httputils.Response(w, func() (*proto.ValidateResponse, error) {
 		return c.service.Validate(req.Context(), &proto.ValidateRequest{
 			Token: token,
@@ -75,7 +78,6 @@ func (c *authClient) Validate(w http.ResponseWriter, req bunrouter.Request) erro
 func (c *authClient) Register(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.RegisterResponse, error) {
 		data := httputils.GetBody[proto.RegisterRequest](w, req)
-
 		return c.service.Register(req.Context(), data)
 	})
 }
@@ -101,14 +103,12 @@ func (c *authClient) GetServices(w http.ResponseWriter, req bunrouter.Request) e
 func (c *authClient) CreateUser(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.CreateUserResponse, error) {
 		data := httputils.GetBody[proto.CreateUserRequest](w, req)
-
 		return c.service.CreateUser(req.Context(), data)
 	})
 }
 func (c *authClient) UpdateUser(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.UpdateUserResponse, error) {
 		data := httputils.GetBody[proto.UpdateUserRequest](w, req)
-
 		return c.service.UpdateUser(req.Context(), data)
 	})
 }
@@ -130,7 +130,6 @@ func (c *authClient) CreateRole(w http.ResponseWriter, req bunrouter.Request) er
 func (c *authClient) AssignUser(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.AssignRoleResponse, error) {
 		data := httputils.GetBody[proto.AssignRoleRequest](w, req)
-
 		return c.service.AssignRole(req.Context(), data)
 	})
 }
@@ -138,7 +137,6 @@ func (c *authClient) AssignUser(w http.ResponseWriter, req bunrouter.Request) er
 func (c *authClient) CreatePermission(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.CreateServicePermissionsResponse, error) {
 		data := httputils.GetBody[proto.CreateServicePermissionsRequest](w, req)
-
 		return c.service.CreateServicePermissions(req.Context(), data)
 	})
 }
@@ -152,7 +150,6 @@ func (c *authClient) GetUserPermissions(w http.ResponseWriter, req bunrouter.Req
 func (c *authClient) GetServicePermissions(w http.ResponseWriter, req bunrouter.Request) error {
 	return httputils.Response(w, func() (*proto.GetServicePermissionsResponse, error) {
 		data := httputils.GetParams[proto.GetServicePermissionsRequest](w, req)
-
 		return c.service.GetServicePermissions(req.Context(), data)
 	})
 }
@@ -466,31 +463,34 @@ func (s *AuthServer) CreateServicePermissions(ctx context.Context, req *proto.Cr
 
 func (s *AuthServer) Login(ctx context.Context, req *proto.LoginRequest) (*proto.User, error) {
 	var user models.User
+	item := new(proto.User)
 
 	if err := s.db.
 		NewSelect().
 		Model(&user).
 		Where("email = ?", req.Email).
-		Scan(ctx, &user); err != nil {
+		Relation("Roles").
+		Scan(ctx); err != nil {
 		return nil, err
 	}
 
 	match := CheckPasswordHash(req.Password, user.Password)
-
 	if !match {
-		return nil, errors.New("invalid")
+		return nil, errors.New("invalid password")
 	}
 
-	token, err := s.aw.GenerateToken(user)
+	if err := s.mapper.MapStruct(user, item); err != nil {
+		return nil, err
+	}
+
+	token, err := s.aw.GenerateToken(item)
 	if err != nil {
 		return nil, err
 	}
 
-	return &proto.User{
-		Id:    user.Id,
-		Email: user.Email,
-		Token: token,
-	}, nil
+	item.Token = token
+
+	return item, nil
 }
 func (s *AuthServer) Register(ctx context.Context, req *proto.RegisterRequest) (*proto.RegisterResponse, error) {
 	_, err := s.db.NewInsert().Model(&models.User{
@@ -514,7 +514,7 @@ func (s *AuthServer) Validate(ctx context.Context, req *proto.ValidateRequest) (
 	}
 
 	var user models.User
-	err = s.db.NewSelect().Model(&user).Where("email = ?", claims.Email).Scan(ctx, &user)
+	err = s.db.NewSelect().Model(&user).Where("email = ?", claims.User.Email).Scan(ctx, &user)
 	if err != nil {
 		return nil, err
 	}
