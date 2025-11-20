@@ -1,8 +1,6 @@
 module github.com/alpha-omega-corp/core
 
-go 1.23.0
-
-toolchain go1.23.11
+go 1.24.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -20,7 +18,7 @@ require (
 	github.com/urfave/cli/v3 v3.3.8
 	go.etcd.io/etcd/client/v3 v3.6.2
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.62.0
-	golang.org/x/crypto v0.40.0
+	golang.org/x/crypto v0.45.0
 	google.golang.org/grpc v1.74.0
 	google.golang.org/protobuf v1.36.6
 )
@@ -94,11 +92,11 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp v0.0.0-20230817173708-d852ddb80c63 // indirect
-	golang.org/x/net v0.41.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	google.golang.org/api v0.215.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
